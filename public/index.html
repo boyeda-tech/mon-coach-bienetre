@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mon Coach Bien-Être</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .profile-wrap { max-width: 560px; margin: 0 auto; }
+    .profile-section { display: none; }
+    .profile-section.active { display: block; }
+  </style>
+</head>
+<body>
+  <!-- AUTH PAGE -->
+  <div id="authPage" class="auth-page">
+    <div class="auth-box">
+      <div class="auth-logo">
+        <div class="logo-icon">🌿</div>
+        <h1>Mon Coach Bien-Être</h1>
+        <p>Votre programme santé personnalisé</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">Connexion</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')">Inscription</button>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <div id="loginForm" class="auth-form active">
+        <div class="form-group">
+          <label class="form-label">Adresse email</label>
+          <input type="email" id="loginEmail" class="form-input" placeholder="vous@exemple.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mot de passe</label>
+          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div id="loginError" class="error-msg hidden"></div>
+        <button class="btn btn-primary btn-full mt-16" onclick="handleLogin()" id="loginBtn">
+          Se connecter
+        </button>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div id="registerForm" class="auth-form">
+        <div class="form-group">
+          <label class="form-label">Prénom</label>
+          <input type="text" id="regName" class="form-input" placeholder="Votre prénom" autocomplete="given-name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Adresse email</label>
+          <input type="email" id="regEmail" class="form-input" placeholder="vous@exemple.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mot de passe</label>
+          <input type="password" id="regPassword" class="form-input" placeholder="••••••••" autocomplete="new-password">
+          <p class="form-hint">Minimum 6 caractères</p>
+        </div>
+        <div id="registerError" class="error-msg hidden"></div>
+        <button class="btn btn-primary btn-full mt-16" onclick="handleRegister()" id="registerBtn">
+          Créer mon compte
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE SETUP PAGE -->
+  <div id="profileSetupPage" class="profile-setup hidden">
+    <div class="profile-wrap">
+      <div class="setup-header">
+        <div style="font-size:40px;margin-bottom:10px">🌿</div>
+        <h2>Configurer mon profil</h2>
+        <p>Ces informations permettent à votre coach de personnaliser votre programme</p>
+      </div>
+
+      <div class="step-indicator">
+        <div class="step-dot active" id="dot0"></div>
+        <div class="step-dot" id="dot1"></div>
+        <div class="step-dot" id="dot2"></div>
+      </div>
+
+      <!-- STEP 1 : Infos personnelles -->
+      <div id="profileStep0" class="profile-section active">
+        <div class="card mb-16">
+          <div class="card-title mb-16">Informations personnelles</div>
+          <div class="form-group">
+            <label class="form-label">Prénom</label>
+            <input type="text" id="p_firstname" class="form-input" placeholder="Votre prénom">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Date de naissance</label>
+              <input type="date" id="p_birthdate" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sexe</label>
+              <select id="p_gender" class="form-select">
+                <option value="">Choisir</option>
+                <option value="homme">Homme</option>
+                <option value="femme">Femme</option>
+                <option value="autre">Autre</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Profession</label>
+            <input type="text" id="p_profession" class="form-input" placeholder="Ex: Infirmier, Cadre, Enseignant...">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="nextProfileStep(1)">Continuer →</button>
+      </div>
+
+      <!-- STEP 2 : Données physiques -->
+      <div id="profileStep1" class="profile-section">
+        <div class="card mb-16">
+          <div class="card-title mb-16">Données physiques & objectif</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Poids actuel (kg)</label>
+              <input type="number" id="p_weight_start" class="form-input" placeholder="Ex: 85" step="0.1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Poids objectif (kg)</label>
+              <input type="number" id="p_weight_target" class="form-input" placeholder="Ex: 70" step="0.1">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Taille (cm)</label>
+            <input type="number" id="p_height" class="form-input" placeholder="Ex: 170">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Traitement en cours</label>
+            <input type="text" id="p_treatment" class="form-input" placeholder="Ex: Ozempic, Aucun...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fréquence du traitement</label>
+            <select id="p_treatment_freq" class="form-select">
+              <option value="">Choisir</option>
+              <option value="quotidien">Quotidien</option>
+              <option value="hebdomadaire">Hebdomadaire</option>
+              <option value="mensuel">Mensuel</option>
+              <option value="autre">Autre</option>
+              <option value="aucun">Aucun</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Problème de genou ?</label>
+            <div class="radio-group">
+              <label class="radio-item">
+                <input type="radio" name="knee" value="false" checked> Non
+              </label>
+              <label class="radio-item">
+                <input type="radio" name="knee" value="true"> Oui (arthrose/douleur)
+              </label>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-secondary" onclick="nextProfileStep(0)">← Retour</button>
+          <button class="btn btn-primary" style="flex:1" onclick="nextProfileStep(2)">Continuer →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3 : Activité & équipement -->
+      <div id="profileStep2" class="profile-section">
+        <div class="card mb-16">
+          <div class="card-title mb-16">Activité & équipement</div>
+          <div class="form-group">
+            <label class="form-label">Niveau de forme actuel</label>
+            <select id="p_fitness_level" class="form-select">
+              <option value="sedentaire">Sédentaire (peu d'activité)</option>
+              <option value="leger">Légèrement actif (1-2x/sem)</option>
+              <option value="moderé">Modérément actif (3-4x/sem)</option>
+              <option value="actif">Actif (5+/sem)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Équipement disponible</label>
+            <div class="check-group" id="equipmentGroup">
+              <label class="check-item">
+                <input type="checkbox" value="velo_home_trainer"> 🚴 Vélo home trainer
+              </label>
+              <label class="check-item">
+                <input type="checkbox" value="tapis_course"> 🏃 Tapis de course
+              </label>
+              <label class="check-item">
+                <input type="checkbox" value="step"> 🪜 Step
+              </label>
+              <label class="check-item">
+                <input type="checkbox" value="trx"> 🔗 TRX
+              </label>
+              <label class="check-item">
+                <input type="checkbox" value="musculation"> 🏋️ Musculation/Poids
+              </label>
+              <label class="check-item">
+                <input type="checkbox" value="autre"> ➕ Autre
+              </label>
+            </div>
+          </div>
+        </div>
+        <div id="profileError" class="error-msg hidden mb-12"></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-secondary" onclick="nextProfileStep(1)">← Retour</button>
+          <button class="btn btn-primary" style="flex:1" onclick="saveProfile()" id="saveProfileBtn">
+            Commencer mon programme ✓
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://zwmrgbgxdrkvhuiukvzs.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_-nCfpJSSh-WhOce-kzT99w_pKz7xrsj';
+
+    let supabase;
+    let currentStep = 0;
+
+    async function initSupabase() {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
+        if (profile) {
+          window.location.href = 'app.html';
+        } else {
+          showProfileSetup();
+        }
+      }
+    }
+
+    function switchAuthTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach((t, i) => {
+        t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
+      });
+      document.getElementById('loginForm').classList.toggle('active', tab === 'login');
+      document.getElementById('registerForm').classList.toggle('active', tab === 'register');
+    }
+
+    async function handleLogin() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const err = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
+      err.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Connexion...';
+      try {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
+        if (profile) {
+          window.location.href = 'app.html';
+        } else {
+          showProfileSetup();
+        }
+      } catch (e) {
+        err.textContent = e.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect.' : e.message;
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Se connecter';
+      }
+    }
+
+    async function handleRegister() {
+      const name = document.getElementById('regName').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const err = document.getElementById('registerError');
+      const btn = document.getElementById('registerBtn');
+      err.classList.add('hidden');
+      if (!name || !email || !password) {
+        err.textContent = 'Veuillez remplir tous les champs.';
+        err.classList.remove('hidden');
+        return;
+      }
+      if (password.length < 6) {
+        err.textContent = 'Le mot de passe doit contenir au moins 6 caractères.';
+        err.classList.remove('hidden');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Création...';
+      try {
+        const { error } = await supabase.auth.signUp({ email, password, options: { data: { first_name: name } } });
+        if (error) throw error;
+        document.getElementById('p_firstname').value = name;
+        showProfileSetup();
+      } catch (e) {
+        err.textContent = e.message;
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Créer mon compte';
+      }
+    }
+
+    function showProfileSetup() {
+      document.getElementById('authPage').classList.add('hidden');
+      document.getElementById('profileSetupPage').classList.remove('hidden');
+    }
+
+    function nextProfileStep(step) {
+      document.getElementById(`profileStep${currentStep}`).classList.remove('active');
+      document.getElementById(`dot${currentStep}`).classList.remove('active');
+      currentStep = step;
+      document.getElementById(`profileStep${currentStep}`).classList.add('active');
+      document.getElementById(`dot${currentStep}`).classList.add('active');
+      window.scrollTo(0, 0);
+    }
+
+    async function saveProfile() {
+      const btn = document.getElementById('saveProfileBtn');
+      const err = document.getElementById('profileError');
+      err.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Enregistrement...';
+
+      const equipment = Array.from(document.querySelectorAll('#equipmentGroup input:checked')).map(c => c.value);
+      const kneeVal = document.querySelector('input[name="knee"]:checked')?.value === 'true';
+
+      const profileData = {
+        first_name: document.getElementById('p_firstname').value.trim(),
+        birth_date: document.getElementById('p_birthdate').value || null,
+        gender: document.getElementById('p_gender').value,
+        profession: document.getElementById('p_profession').value.trim(),
+        weight_start: parseFloat(document.getElementById('p_weight_start').value) || null,
+        weight_target: parseFloat(document.getElementById('p_weight_target').value) || null,
+        height: parseFloat(document.getElementById('p_height').value) || null,
+        treatment: document.getElementById('p_treatment').value.trim(),
+        treatment_frequency: document.getElementById('p_treatment_freq').value,
+        knee_issue: kneeVal,
+        equipment: equipment,
+        fitness_level: document.getElementById('p_fitness_level').value,
+      };
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('profiles').upsert({ id: user.id, ...profileData });
+        if (error) throw error;
+        if (profileData.weight_start) {
+          await supabase.from('weight_logs').upsert({
+            user_id: user.id,
+            date: new Date().toISOString().split('T')[0],
+            weight: profileData.weight_start
+          }, { onConflict: 'user_id,date' });
+        }
+        window.location.href = 'app.html';
+      } catch (e) {
+        err.textContent = 'Erreur: ' + e.message;
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Commencer mon programme ✓';
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (document.getElementById('loginForm').classList.contains('active')) handleLogin();
+        else handleRegister();
+      }
+    });
+
+    initSupabase();
+  </script>
+</body>
+</html>
