@@ -2,9 +2,6 @@
    Mon Coach Bien-Être — app.js
    ============================================ */
 
-const SUPABASE_URL = 'https://zwmrgbgxdrkvhuiukvzs.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_-nCfpJSSh-WhOce-kzT99w_pKz7xrsj';
-
 let supabase, currentUser, userProfile, weightHistory = [], weightChart;
 
 const QUOTES = [
@@ -30,8 +27,14 @@ const WORKOUT_PROGRAM = [
 // ---- INIT ----
 
 async function init() {
+  // Récupère les credentials depuis le serveur Express (env vars Render)
+  const res = await fetch('/api/config');
+  if (!res.ok) { window.location.href = 'index.html'; return; }
+  const { supabaseUrl, supabaseKey } = await res.json();
+  if (!supabaseUrl || !supabaseKey) { window.location.href = 'index.html'; return; }
+
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  supabase = createClient(supabaseUrl, supabaseKey);
 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) { window.location.href = 'index.html'; return; }

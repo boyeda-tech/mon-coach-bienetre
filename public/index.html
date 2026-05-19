@@ -49,7 +49,7 @@
           <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" autocomplete="current-password">
         </div>
         <div id="loginError" class="error-msg hidden"></div>
-        <button class="btn btn-primary btn-full mt-16" onclick="handleLogin()" id="loginBtn">
+        <button class="btn btn-primary btn-full mt-16" onclick="handleLogin()" id="loginBtn" disabled>
           Se connecter
         </button>
       </div>
@@ -70,7 +70,7 @@
           <p class="form-hint">Minimum 6 caractères</p>
         </div>
         <div id="registerError" class="error-msg hidden"></div>
-        <button class="btn btn-primary btn-full mt-16" onclick="handleRegister()" id="registerBtn">
+        <button class="btn btn-primary btn-full mt-16" onclick="handleRegister()" id="registerBtn" disabled>
           Créer mon compte
         </button>
       </div>
@@ -225,23 +225,38 @@
   </div>
 
   <script>
-    const SUPABASE_URL = 'https://zwmrgbgxdrkvhuiukvzs.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_-nCfpJSSh-WhOce-kzT99w_pKz7xrsj';
-
     let supabase;
     let currentStep = 0;
 
-    async function initSupabase() {
-      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-      supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
-        if (profile) {
-          window.location.href = 'app.html';
-        } else {
-          showProfileSetup();
+    async function initSession() {
+      try {
+        // 1. Récupère les credentials depuis le serveur Express (env vars Render)
+        const res = await fetch('/api/config');
+        if (!res.ok) throw new Error('Impossible de charger la configuration serveur');
+        const { supabaseUrl, supabaseKey } = await res.json();
+        if (!supabaseUrl || !supabaseKey) throw new Error('Configuration Supabase manquante');
+
+        // 2. Import et initialisation du client Supabase
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+        supabase = createClient(supabaseUrl, supabaseKey);
+
+        // 3. Activation des boutons — supabase est maintenant garanti initialisé
+        document.getElementById('loginBtn').disabled = false;
+        document.getElementById('registerBtn').disabled = false;
+
+        // 4. Vérification session existante
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
+          if (profile) {
+            window.location.href = 'app.html';
+          } else {
+            showProfileSetup();
+          }
         }
+      } catch (e) {
+        document.getElementById('loginError').textContent = 'Erreur de connexion : ' + e.message;
+        document.getElementById('loginError').classList.remove('hidden');
       }
     }
 
@@ -385,7 +400,7 @@
       }
     });
 
-    initSupabase();
+    initSession();
   </script>
 </body>
 </html>

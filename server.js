@@ -103,6 +103,16 @@ QUESTION : ${question}
 Réponds de manière personnalisée, pratique et bienveillante en 3-5 paragraphes.`;
 }
 
+// Expose les credentials publics Supabase au frontend via les env vars du serveur
+app.get('/api/config', (_req, res) => {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    return res.status(500).json({ error: 'Variables SUPABASE_URL et SUPABASE_PUBLISHABLE_KEY manquantes sur le serveur' });
+  }
+  res.json({ supabaseUrl, supabaseKey });
+});
+
 app.post('/api/ai', async (req, res) => {
   const { type, profile, journals, weightHistory, question } = req.body;
   if (!type || !profile) return res.status(400).json({ error: 'Missing required fields' });
