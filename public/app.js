@@ -27,41 +27,69 @@ const WORKOUT_PROGRAM = [
 // ---- INIT ----
 
 async function init() {
-  // Récupère les credentials depuis le serveur Express (env vars Render)
-  const res = await fetch('/api/config');
-  if (!res.ok) { window.location.href = 'index.html'; return; }
-  const { supabaseUrl, supabaseKey } = await res.json();
-  if (!supabaseUrl || !supabaseKey) { window.location.href = 'index.html'; return; }
+  try {
+    // 1. Config depuis le serveur (env vars Render)
+    const res = await fetch('/api/config');
+    if (!res.ok) throw new Error('Config serveur inaccessible (' + res.status + ')');
+    const { supabaseUrl, supabaseKey } = await res.json();
+    if (!supabaseUrl || !supabaseKey) throw new Error('Variables Supabase manquantes');
 
-  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-  supabase = createClient(supabaseUrl, supabaseKey);
+    // 2. Client Supabase via dynamic import
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    supabase = createClient(supabaseUrl, supabaseKey);
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) { window.location.href = 'index.html'; return; }
+    // 3. Session — lecture localStorage, avec fallback sessionStorage (tokens passés par index.html)
+    let { data: { session } } = await supabase.auth.getSession();
 
-  currentUser = session.user;
+    if (!session) {
+      const at = sessionStorage.getItem('_sb_at');
+      const rt = sessionStorage.getItem('_sb_rt');
+      sessionStorage.removeItem('_sb_at');
+      sessionStorage.removeItem('_sb_rt');
+      if (at && rt) {
+        const { data } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+        session = data.session;
+      }
+    }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', currentUser.id)
-    .single();
+    if (!session) {
+      window.location.href = 'index.html';
+      return;
+    }
 
-  if (!profile) { window.location.href = 'index.html'; return; }
-  userProfile = profile;
+    currentUser = session.user;
 
-  const initials = (profile.first_name || 'U').charAt(0).toUpperCase();
-  document.getElementById('userAvatar').textContent = initials;
+    // 4. Profil utilisateur
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', currentUser.id)
+      .single();
 
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('newWeightDate').value = today;
-  document.getElementById('journalDateLabel').textContent = formatDate(today);
+    if (profileError || !profile) {
+      window.location.href = 'index.html';
+      return;
+    }
+    userProfile = profile;
 
-  await loadWeightHistory();
-  renderHomePage();
-  renderProgram();
-  renderWeightPage();
-  renderAiProfile();
+    // 5. Rendu initial
+    const initials = (profile.first_name || 'U').charAt(0).toUpperCase();
+    document.getElementById('userAvatar').textContent = initials;
+
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('newWeightDate').value = today;
+    document.getElementById('journalDateLabel').textContent = formatDate(today);
+
+    await loadWeightHistory();
+    renderHomePage();
+    renderProgram();
+    renderWeightPage();
+    renderAiProfile();
+
+  } catch (e) {
+    console.error('[MonCoach] init() error:', e);
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;font-family:-apple-system,system-ui,sans-serif"><div style="text-align:center"><p style="color:#6b7280;margin-bottom:20px">Impossible de charger l\'application.</p><a href="index.html" style="background:#1D9E75;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px">Retour à la connexion</a></div></div>';
+  }
 }
 
 // ---- NAVIGATION ----

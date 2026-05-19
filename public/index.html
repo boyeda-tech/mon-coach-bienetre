@@ -249,7 +249,7 @@
         if (session) {
           const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
           if (profile) {
-            window.location.href = 'app.html';
+            await navigateToApp();
           } else {
             showProfileSetup();
           }
@@ -290,7 +290,7 @@
         const { data: { session } } = await supabase.auth.getSession();
         const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
         if (profile) {
-          window.location.href = 'app.html';
+          await navigateToApp();
         } else {
           showProfileSetup();
         }
@@ -332,6 +332,19 @@
         btn.disabled = false;
         btn.textContent = 'Créer mon compte';
       }
+    }
+
+    // Stocke les tokens Supabase dans sessionStorage avant de naviguer vers app.html.
+    // Évite le bug où un nouveau client Supabase ne retrouve pas la session cross-page.
+    async function navigateToApp() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          sessionStorage.setItem('_sb_at', session.access_token);
+          sessionStorage.setItem('_sb_rt', session.refresh_token);
+        }
+      } catch (_) {}
+      window.location.href = 'app.html';
     }
 
     function showProfileSetup() {
@@ -384,7 +397,7 @@
             weight: profileData.weight_start
           }, { onConflict: 'user_id,date' });
         }
-        window.location.href = 'app.html';
+        await navigateToApp();
       } catch (e) {
         err.textContent = 'Erreur: ' + e.message;
         err.classList.remove('hidden');
