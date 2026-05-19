@@ -27,13 +27,19 @@ html, body {
   font-size: 15px;
   line-height: 1.6;
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* ---- BUTTONS ---- */
 .btn {
+  display: -webkit-inline-flex;
   display: inline-flex;
+  -webkit-align-items: center;
   align-items: center;
+  -webkit-justify-content: center;
   justify-content: center;
   gap: 8px;
   padding: 12px 20px;
@@ -42,11 +48,13 @@ html, body {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  -webkit-transition: all 0.18s ease;
   transition: all 0.18s ease;
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .btn-primary { background: var(--green); color: #fff; }
-.btn-primary:hover { background: var(--green-dark); transform: translateY(-1px); }
+.btn-primary:hover { background: var(--green-dark); -webkit-transform: translateY(-1px); transform: translateY(-1px); }
 .btn-secondary { background: var(--green-light); color: var(--green-dark); }
 .btn-secondary:hover { background: #d0efe5; }
 .btn-danger { background: #fee2e2; color: var(--red); }
@@ -54,7 +62,7 @@ html, body {
 .btn-ghost { background: transparent; color: var(--green); border: 2px solid var(--green); }
 .btn-ghost:hover { background: var(--green-light); }
 .btn-full { width: 100%; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; -webkit-transform: none !important; transform: none !important; }
 .btn-sm { padding: 8px 14px; font-size: 13px; border-radius: 8px; }
 
 /* ---- CARDS ---- */
@@ -177,7 +185,9 @@ html, body {
 .progress-fill {
   height: 100%;
   border-radius: 999px;
+  background: -webkit-linear-gradient(left, var(--green), #34d399);
   background: linear-gradient(90deg, var(--green), #34d399);
+  -webkit-transition: width 0.5s ease;
   transition: width 0.5s ease;
 }
 
@@ -240,8 +250,14 @@ html, body {
 /* ---- AUTH PAGE ---- */
 .auth-page {
   min-height: 100vh;
-  display: flex; align-items: center; justify-content: center;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
   padding: 24px;
+  background: -webkit-linear-gradient(315deg, var(--green-light) 0%, #fff 60%);
   background: linear-gradient(135deg, var(--green-light) 0%, #fff 60%);
 }
 .auth-box {
@@ -431,9 +447,11 @@ tr:last-child td { border-bottom: none; }
   border: 2.5px solid var(--border);
   border-top-color: var(--green);
   border-radius: 50%;
+  -webkit-animation: spin 0.7s linear infinite;
   animation: spin 0.7s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@-webkit-keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+@keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
 
 /* ---- PROFILE SETUP ---- */
 .profile-setup {
@@ -479,9 +497,16 @@ tr:last-child td { border-bottom: none; }
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.4);
   z-index: 300;
-  display: none; align-items: flex-end; justify-content: center;
+  display: none;
 }
-.modal-overlay.open { display: flex; }
+.modal-overlay.open {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: flex-end;
+  align-items: flex-end;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
 .modal-box {
   background: var(--white);
   border-radius: 20px 20px 0 0;
@@ -489,9 +514,11 @@ tr:last-child td { border-bottom: none; }
   width: 100%; max-width: 680px;
   max-height: 80vh;
   overflow-y: auto;
+  -webkit-animation: slideUp 0.25s ease;
   animation: slideUp 0.25s ease;
 }
-@keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@-webkit-keyframes slideUp { from { -webkit-transform: translateY(40px); transform: translateY(40px); opacity: 0; } to { -webkit-transform: translateY(0); transform: translateY(0); opacity: 1; } }
+@keyframes slideUp { from { -webkit-transform: translateY(40px); transform: translateY(40px); opacity: 0; } to { -webkit-transform: translateY(0); transform: translateY(0); opacity: 1; } }
 .modal-handle {
   width: 40px; height: 4px;
   background: var(--border); border-radius: 2px;

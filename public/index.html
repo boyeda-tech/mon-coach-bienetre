@@ -2,13 +2,22 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1D9E75">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Mon Coach Bien-Être</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
   <link rel="stylesheet" href="styles.css">
   <style>
+    /* Styles critiques inline — appliqués avant le CSS externe, compatibles Safari */
     .profile-wrap { max-width: 560px; margin: 0 auto; }
     .profile-section { display: none; }
     .profile-section.active { display: block; }
+    /* Masquer les éléments clés dès le chargement — évite le flash Safari */
+    #registerForm { display: none; }
+    #profileSetupPage { display: none; }
   </style>
 </head>
 <body>
@@ -16,7 +25,12 @@
   <div id="authPage" class="auth-page">
     <div class="auth-box">
       <div class="auth-logo">
-        <div class="logo-icon">🌿</div>
+        <div class="logo-icon">
+          <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M18 3C11 6 8.5 14 10 24c4-2 8-7 8-7s4 5 8 7C27.5 14 25 6 18 3z" fill="white"/>
+            <line x1="18" y1="17" x2="18" y2="33" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h1>Mon Coach Bien-Être</h1>
         <p>Votre programme santé personnalisé</p>
       </div>
@@ -69,7 +83,12 @@
   <div id="profileSetupPage" class="profile-setup hidden">
     <div class="profile-wrap">
       <div class="setup-header">
-        <div style="font-size:40px;margin-bottom:10px">🌿</div>
+        <div style="width:56px;height:56px;background:#1D9E75;border-radius:14px;display:-webkit-flex;display:flex;align-items:center;justify-content:center;margin:0 auto 10px">
+          <svg width="32" height="32" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M18 3C11 6 8.5 14 10 24c4-2 8-7 8-7s4 5 8 7C27.5 14 25 6 18 3z" fill="white"/>
+            <line x1="18" y1="17" x2="18" y2="33" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h2>Configurer mon profil</h2>
         <p>Ces informations permettent à votre coach de personnaliser votre programme</p>
       </div>
@@ -232,11 +251,19 @@
     }
 
     function switchAuthTab(tab) {
-      document.querySelectorAll('.auth-tab').forEach((t, i) => {
+      document.querySelectorAll('.auth-tab').forEach(function(t, i) {
         t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
       });
-      document.getElementById('loginForm').classList.toggle('active', tab === 'login');
-      document.getElementById('registerForm').classList.toggle('active', tab === 'register');
+      // Utilise style.display directement pour fiabilité sur Safari iOS/macOS
+      var loginForm = document.getElementById('loginForm');
+      var registerForm = document.getElementById('registerForm');
+      if (tab === 'login') {
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+      } else {
+        loginForm.style.display = 'none';
+        registerForm.style.display = 'block';
+      }
     }
 
     async function handleLogin() {
@@ -298,8 +325,8 @@
     }
 
     function showProfileSetup() {
-      document.getElementById('authPage').classList.add('hidden');
-      document.getElementById('profileSetupPage').classList.remove('hidden');
+      document.getElementById('authPage').style.display = 'none';
+      document.getElementById('profileSetupPage').style.display = 'block';
     }
 
     function nextProfileStep(step) {
