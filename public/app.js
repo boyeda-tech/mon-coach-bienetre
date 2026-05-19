@@ -5,7 +5,9 @@
 const SUPABASE_URL = 'https://zwmrgbgxdrkvhuiukvzs.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_-nCfpJSSh-WhOce-kzT99w_pKz7xrsj';
 
-let supabase, currentUser, userProfile, weightHistory = [], weightChart;
+// Client initialisé immédiatement depuis le script UMD chargé en <head> de app.html
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser, userProfile, weightHistory = [], weightChart;
 
 const QUOTES = [
   { text: "Chaque pas en avant est un pas loin de là où vous étiez.", author: "— Unknown" },
@@ -30,9 +32,6 @@ const WORKOUT_PROGRAM = [
 // ---- INIT ----
 
 async function init() {
-  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) { window.location.href = 'index.html'; return; }
 

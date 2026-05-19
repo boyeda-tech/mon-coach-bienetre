@@ -11,6 +11,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
+  <!-- Supabase UMD chargé de façon synchrone — client disponible avant tout clic utilisateur -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
     /* Styles critiques inline — appliqués avant le CSS externe, compatibles Safari */
     .profile-wrap { max-width: 560px; margin: 0 auto; }
@@ -228,12 +230,11 @@
     const SUPABASE_URL = 'https://zwmrgbgxdrkvhuiukvzs.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_-nCfpJSSh-WhOce-kzT99w_pKz7xrsj';
 
-    let supabase;
+    // Client initialisé immédiatement depuis le script UMD chargé en <head>
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let currentStep = 0;
 
-    async function initSupabase() {
-      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-      supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    async function initSession() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
@@ -385,7 +386,7 @@
       }
     });
 
-    initSupabase();
+    initSession();
   </script>
 </body>
 </html>
