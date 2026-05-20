@@ -11,7 +11,6 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
-  <script src="/supabase.min.js"></script>
   <style>
     /* Styles critiques inline — appliqués avant le CSS externe, compatibles Safari */
     .profile-wrap { max-width: 560px; margin: 0 auto; }
@@ -229,118 +228,78 @@
   </div>
 
   <script>
+    // Aucune dépendance Supabase sur cette page — auth entièrement côté serveur
     var _b = document.getElementById('buildBadge');
-    if (_b && window.__BUILD__) _b.textContent = 'v' + window.__BUILD__.slice(0,16);
+    if (_b && window.__BUILD__) _b.textContent = 'v' + window.__BUILD__.slice(0, 16);
 
-    console.log('[MonCoach] index.html chargé — build:', window.__BUILD__);
-    console.log('[MonCoach] window.__SB_URL__ défini:', !!window.__SB_URL__);
-    console.log('[MonCoach] window.__SB_KEY__ défini:', !!window.__SB_KEY__);
-    console.log('[MonCoach] window.supabase disponible:', typeof window.supabase);
-
-    let supabase;
     let currentStep = 0;
+    let _tokens = null; // { access_token, refresh_token, user_id }
 
-    try {
-      if (!window.supabase) throw new Error('Bibliothèque Supabase non chargée (window.supabase undefined)');
-      if (!window.__SB_URL__) throw new Error('SUPABASE_URL manquant — vérifiez les variables Render');
-      if (!window.__SB_KEY__) throw new Error('SUPABASE_PUBLISHABLE_KEY manquant — vérifiez les variables Render');
-      supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
-      console.log('[MonCoach] Supabase initialisé avec succès');
-    } catch (e) {
-      console.error('[MonCoach] Erreur init Supabase:', e.message);
-      var _el = document.getElementById('loginError');
-      if (_el) { _el.textContent = '⚠️ ' + e.message; _el.classList.remove('hidden'); }
-    }
-
-    async function init() {
-      if (!supabase) return;
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
-          if (profile) {
-            window.location.href = 'app.html';
-          } else {
-            showProfileSetup();
-          }
-        }
-      } catch (e) {
-        document.getElementById('loginError').textContent = 'Erreur : ' + e.message;
-        document.getElementById('loginError').classList.remove('hidden');
-      }
+    function showErr(id, msg) {
+      var el = document.getElementById(id);
+      if (el) { el.textContent = msg; el.classList.remove('hidden'); }
     }
 
     function switchAuthTab(tab) {
       document.querySelectorAll('.auth-tab').forEach(function(t, i) {
         t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
       });
-      var loginForm = document.getElementById('loginForm');
-      var registerForm = document.getElementById('registerForm');
-      if (tab === 'login') {
-        loginForm.style.display = 'block';
-        registerForm.style.display = 'none';
-      } else {
-        loginForm.style.display = 'none';
-        registerForm.style.display = 'block';
-      }
+      document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
     }
 
     async function handleLogin() {
-      const email = document.getElementById('loginEmail').value.trim();
-      const password = document.getElementById('loginPassword').value;
-      const err = document.getElementById('loginError');
-      const btn = document.getElementById('loginBtn');
+      var email = document.getElementById('loginEmail').value.trim();
+      var password = document.getElementById('loginPassword').value;
+      var err = document.getElementById('loginError');
+      var btn = document.getElementById('loginBtn');
       err.classList.add('hidden');
-      if (!supabase) { err.textContent = 'Service indisponible, rechargez la page.'; err.classList.remove('hidden'); return; }
-      btn.disabled = true;
-      btn.textContent = 'Connexion...';
+      btn.disabled = true; btn.textContent = 'Connexion...';
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        const { data: profile } = await supabase.from('profiles').select('id').eq('id', data.user.id).single();
-        if (profile) {
+        var res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
+        sessionStorage.setItem('_sb_at', data.access_token);
+        sessionStorage.setItem('_sb_rt', data.refresh_token);
+        if (data.has_profile) {
           window.location.href = 'app.html';
         } else {
+          _tokens = data;
           showProfileSetup();
         }
       } catch (e) {
-        err.textContent = e.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect.' : e.message;
-        err.classList.remove('hidden');
-        btn.disabled = false;
-        btn.textContent = 'Se connecter';
+        showErr('loginError', e.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect.' : e.message);
+        btn.disabled = false; btn.textContent = 'Se connecter';
       }
     }
 
     async function handleRegister() {
-      const name = document.getElementById('regName').value.trim();
-      const email = document.getElementById('regEmail').value.trim();
-      const password = document.getElementById('regPassword').value;
-      const err = document.getElementById('registerError');
-      const btn = document.getElementById('registerBtn');
-      err.classList.add('hidden');
-      if (!supabase) { err.textContent = 'Service indisponible, rechargez la page.'; err.classList.remove('hidden'); return; }
-      if (!name || !email || !password) {
-        err.textContent = 'Veuillez remplir tous les champs.';
-        err.classList.remove('hidden');
-        return;
-      }
-      if (password.length < 6) {
-        err.textContent = 'Le mot de passe doit contenir au moins 6 caractères.';
-        err.classList.remove('hidden');
-        return;
-      }
-      btn.disabled = true;
-      btn.textContent = 'Création...';
+      var name = document.getElementById('regName').value.trim();
+      var email = document.getElementById('regEmail').value.trim();
+      var password = document.getElementById('regPassword').value;
+      var btn = document.getElementById('registerBtn');
+      document.getElementById('registerError').classList.add('hidden');
+      if (!name || !email || !password) { showErr('registerError', 'Veuillez remplir tous les champs.'); return; }
+      if (password.length < 6) { showErr('registerError', 'Mot de passe : 6 caractères minimum.'); return; }
+      btn.disabled = true; btn.textContent = 'Création...';
       try {
-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { first_name: name } } });
-        if (error) throw error;
+        var res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur lors de la création');
+        _tokens = data;
         document.getElementById('p_firstname').value = name;
         showProfileSetup();
       } catch (e) {
-        err.textContent = e.message;
-        err.classList.remove('hidden');
-        btn.disabled = false;
-        btn.textContent = 'Créer mon compte';
+        showErr('registerError', e.message);
+        btn.disabled = false; btn.textContent = 'Créer mon compte';
       }
     }
 
@@ -359,16 +318,11 @@
     }
 
     async function saveProfile() {
-      const btn = document.getElementById('saveProfileBtn');
-      const err = document.getElementById('profileError');
-      err.classList.add('hidden');
-      btn.disabled = true;
-      btn.textContent = 'Enregistrement...';
-
-      const equipment = Array.from(document.querySelectorAll('#equipmentGroup input:checked')).map(function(c) { return c.value; });
-      const kneeVal = document.querySelector('input[name="knee"]:checked')?.value === 'true';
-
-      const profileData = {
+      var btn = document.getElementById('saveProfileBtn');
+      document.getElementById('profileError').classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Enregistrement...';
+      var equipment = Array.from(document.querySelectorAll('#equipmentGroup input:checked')).map(function(c) { return c.value; });
+      var profile = {
         first_name: document.getElementById('p_firstname').value.trim(),
         birth_date: document.getElementById('p_birthdate').value || null,
         gender: document.getElementById('p_gender').value,
@@ -378,28 +332,22 @@
         height: parseFloat(document.getElementById('p_height').value) || null,
         treatment: document.getElementById('p_treatment').value.trim(),
         treatment_frequency: document.getElementById('p_treatment_freq').value,
-        knee_issue: kneeVal,
+        knee_issue: document.querySelector('input[name="knee"]:checked')?.value === 'true',
         equipment: equipment,
         fitness_level: document.getElementById('p_fitness_level').value,
       };
-
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const { error } = await supabase.from('profiles').upsert({ id: user.id, ...profileData });
-        if (error) throw error;
-        if (profileData.weight_start) {
-          await supabase.from('weight_logs').upsert({
-            user_id: user.id,
-            date: new Date().toISOString().split('T')[0],
-            weight: profileData.weight_start
-          }, { onConflict: 'user_id,date' });
-        }
+        var res = await fetch('/api/profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: _tokens.access_token, user_id: _tokens.user_id, profile }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur sauvegarde');
         window.location.href = 'app.html';
       } catch (e) {
-        err.textContent = 'Erreur: ' + e.message;
-        err.classList.remove('hidden');
-        btn.disabled = false;
-        btn.textContent = 'Commencer mon programme ✓';
+        showErr('profileError', 'Erreur : ' + e.message);
+        btn.disabled = false; btn.textContent = 'Commencer mon programme ✓';
       }
     }
 
@@ -409,8 +357,6 @@
         if (registerShown) handleRegister(); else handleLogin();
       }
     });
-
-    init();
   </script>
 </body>
 </html>

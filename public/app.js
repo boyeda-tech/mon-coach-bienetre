@@ -39,7 +39,19 @@ async function init() {
     return;
   }
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
+
+    // Restaurer la session depuis sessionStorage si localStorage vide
+    if (!session) {
+      const at = sessionStorage.getItem('_sb_at');
+      const rt = sessionStorage.getItem('_sb_rt');
+      sessionStorage.removeItem('_sb_at');
+      sessionStorage.removeItem('_sb_rt');
+      if (at && rt) {
+        const { data } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+        session = data.session;
+      }
+    }
 
     if (!session) {
       window.location.href = 'index.html';

@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient as createSbClient } from '@supabase/supabase-js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -50,6 +51,67 @@ app.get('/api/config', (_req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ---- AUTH API (gérée côté serveur — aucune dépendance Supabase sur la page login) ----
+
+function getSb() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new Error('Variables Supabase manquantes sur le serveur');
+  return createSbClient(url, key);
+}
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis' });
+    const sb = getSb();
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) return res.status(400).json({ error: error.message });
+    const { data: profile } = await sb.from('profiles').select('id').eq('id', data.user.id).single();
+    res.json({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      user_id: data.user.id,
+      has_profile: !!profile,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+    if (!email || !password || !name) return res.status(400).json({ error: 'Tous les champs sont requis' });
+    const sb = getSb();
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { first_name: name } } });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({
+      access_token: data.session?.access_token || null,
+      refresh_token: data.session?.refresh_token || null,
+      user_id: data.user?.id || null,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/profiles', async (req, res) => {
+  try {
+    const { access_token, user_id, profile } = req.body;
+    if (!access_token || !user_id) return res.status(401).json({ error: 'Non authentifié' });
+    const sb = createSbClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
+      global: { headers: { Authorization: `Bearer ${access_token}` } },
+    });
+    const { error } = await sb.from('profiles').upsert({ id: user_id, ...profile });
+    if (error) return res.status(400).json({ error: error.message });
+    if (profile.weight_start) {
+      await sb.from('weight_logs').upsert({
+        user_id,
+        date: new Date().toISOString().split('T')[0],
+        weight: profile.weight_start,
+      }, { onConflict: 'user_id,date' });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 function buildSynthesisPrompt(profile, journals, weightHistory) {
   const age = profile.birth_date
