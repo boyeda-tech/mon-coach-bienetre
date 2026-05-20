@@ -294,11 +294,14 @@
         });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur lors de la création');
-        _tokens = data;
-        if (data.access_token) {
-          sessionStorage.setItem('_sb_at', data.access_token);
-          sessionStorage.setItem('_sb_rt', data.refresh_token);
+        if (data.needs_confirmation) {
+          showErr('registerError', '✉️ Un email de confirmation vous a été envoyé. Confirmez votre adresse puis connectez-vous.');
+          btn.disabled = false; btn.textContent = 'Créer mon compte';
+          return;
         }
+        _tokens = data;
+        sessionStorage.setItem('_sb_at', data.access_token);
+        sessionStorage.setItem('_sb_rt', data.refresh_token);
         document.getElementById('p_firstname').value = name;
         showProfileSetup();
       } catch (e) {

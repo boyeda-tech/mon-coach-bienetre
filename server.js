@@ -4,7 +4,6 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient as createSbClient } from '@supabase/supabase-js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -52,28 +51,44 @@ app.get('/api/config', (_req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ---- AUTH API (gérée côté serveur — aucune dépendance Supabase sur la page login) ----
+// ---- AUTH API — appels directs à l'API REST Supabase, aucun SDK importé ----
 
-function getSb() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error('Variables Supabase manquantes sur le serveur');
-  return createSbClient(url, key);
+function sbHeaders(token) {
+  const h = {
+    'Content-Type': 'application/json',
+    'apikey': process.env.SUPABASE_PUBLISHABLE_KEY,
+  };
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  return h;
+}
+
+function sbUrl(path) {
+  return `${process.env.SUPABASE_URL}${path}`;
 }
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis' });
-    const sb = getSb();
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) return res.status(400).json({ error: error.message });
-    const { data: profile } = await sb.from('profiles').select('id').eq('id', data.user.id).single();
+
+    const authRes = await fetch(sbUrl('/auth/v1/token?grant_type=password'), {
+      method: 'POST',
+      headers: sbHeaders(),
+      body: JSON.stringify({ email, password }),
+    });
+    const auth = await authRes.json();
+    if (!authRes.ok) return res.status(400).json({ error: auth.error_description || auth.message || 'Identifiants incorrects' });
+
+    const profileRes = await fetch(sbUrl(`/rest/v1/profiles?id=eq.${auth.user.id}&select=id`), {
+      headers: sbHeaders(auth.access_token),
+    });
+    const profiles = await profileRes.json();
+
     res.json({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      user_id: data.user.id,
-      has_profile: !!profile,
+      access_token: auth.access_token,
+      refresh_token: auth.refresh_token,
+      user_id: auth.user.id,
+      has_profile: Array.isArray(profiles) && profiles.length > 0,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -82,13 +97,23 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, name } = req.body;
     if (!email || !password || !name) return res.status(400).json({ error: 'Tous les champs sont requis' });
-    const sb = getSb();
-    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { first_name: name } } });
-    if (error) return res.status(400).json({ error: error.message });
+
+    const signupRes = await fetch(sbUrl('/auth/v1/signup'), {
+      method: 'POST',
+      headers: sbHeaders(),
+      body: JSON.stringify({ email, password, data: { first_name: name } }),
+    });
+    const data = await signupRes.json();
+    if (!signupRes.ok) return res.status(400).json({ error: data.msg || data.message || 'Erreur inscription' });
+
+    if (!data.access_token) {
+      return res.status(200).json({ needs_confirmation: true });
+    }
+
     res.json({
-      access_token: data.session?.access_token || null,
-      refresh_token: data.session?.refresh_token || null,
-      user_id: data.user?.id || null,
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      user_id: data.user?.id,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -96,19 +121,26 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/profiles', async (req, res) => {
   try {
     const { access_token, user_id, profile } = req.body;
-    if (!access_token || !user_id) return res.status(401).json({ error: 'Non authentifié' });
-    const sb = createSbClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
-      global: { headers: { Authorization: `Bearer ${access_token}` } },
+    if (!access_token || !user_id) return res.status(401).json({ error: 'Non authentifié — désactivez la confirmation email dans Supabase' });
+
+    const upsertRes = await fetch(sbUrl('/rest/v1/profiles'), {
+      method: 'POST',
+      headers: { ...sbHeaders(access_token), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: user_id, ...profile }),
     });
-    const { error } = await sb.from('profiles').upsert({ id: user_id, ...profile });
-    if (error) return res.status(400).json({ error: error.message });
-    if (profile.weight_start) {
-      await sb.from('weight_logs').upsert({
-        user_id,
-        date: new Date().toISOString().split('T')[0],
-        weight: profile.weight_start,
-      }, { onConflict: 'user_id,date' });
+    if (!upsertRes.ok) {
+      const err = await upsertRes.json();
+      return res.status(400).json({ error: err.message || 'Erreur sauvegarde profil' });
     }
+
+    if (profile.weight_start) {
+      await fetch(sbUrl('/rest/v1/weight_logs'), {
+        method: 'POST',
+        headers: { ...sbHeaders(access_token), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ user_id, date: new Date().toISOString().split('T')[0], weight: profile.weight_start }),
+      });
+    }
+
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
