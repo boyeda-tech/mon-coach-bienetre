@@ -3,8 +3,13 @@
    ============================================ */
 
 // Credentials injectés côté serveur — client créé synchronement, aucun fetch
-const supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
-let currentUser, userProfile, weightHistory = [], weightChart;
+let supabase, currentUser, userProfile, weightHistory = [], weightChart;
+try {
+  if (!window.__SB_URL__ || !window.__SB_KEY__) throw new Error('Config manquante');
+  supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
+} catch (e) {
+  console.error('[MonCoach] Supabase init failed:', e.message);
+}
 
 const QUOTES = [
   { text: "Chaque pas en avant est un pas loin de là où vous étiez.", author: "— Unknown" },
@@ -29,6 +34,10 @@ const WORKOUT_PROGRAM = [
 // ---- INIT ----
 
 async function init() {
+  if (!supabase) {
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;font-family:-apple-system,system-ui,sans-serif"><div style="text-align:center"><p style="color:#6b7280;margin-bottom:20px">Service indisponible. Rechargez la page.</p><a href="index.html" style="background:#1D9E75;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px">Retour à la connexion</a></div></div>';
+    return;
+  }
   try {
     const { data: { session } } = await supabase.auth.getSession();
 

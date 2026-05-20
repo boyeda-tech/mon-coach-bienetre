@@ -227,10 +227,21 @@
 
   <script>
     // Credentials injectés côté serveur — synchrones, aucun fetch nécessaire
-    const supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
+    let supabase;
     let currentStep = 0;
 
+    try {
+      if (!window.__SB_URL__ || !window.__SB_KEY__) throw new Error('Config manquante');
+      supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
+    } catch (e) {
+      document.addEventListener('DOMContentLoaded', function() {
+        var el = document.getElementById('loginError');
+        if (el) { el.textContent = 'Erreur de configuration : ' + e.message; el.classList.remove('hidden'); }
+      });
+    }
+
     async function init() {
+      if (!supabase) return;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -268,6 +279,7 @@
       const err = document.getElementById('loginError');
       const btn = document.getElementById('loginBtn');
       err.classList.add('hidden');
+      if (!supabase) { err.textContent = 'Service indisponible, rechargez la page.'; err.classList.remove('hidden'); return; }
       btn.disabled = true;
       btn.textContent = 'Connexion...';
       try {
@@ -294,6 +306,7 @@
       const err = document.getElementById('registerError');
       const btn = document.getElementById('registerBtn');
       err.classList.add('hidden');
+      if (!supabase) { err.textContent = 'Service indisponible, rechargez la page.'; err.classList.remove('hidden'); return; }
       if (!name || !email || !password) {
         err.textContent = 'Veuillez remplir tous les champs.';
         err.classList.remove('hidden');
