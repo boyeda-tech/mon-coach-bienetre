@@ -295,6 +295,10 @@
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur lors de la création');
         _tokens = data;
+        if (data.access_token) {
+          sessionStorage.setItem('_sb_at', data.access_token);
+          sessionStorage.setItem('_sb_rt', data.refresh_token);
+        }
         document.getElementById('p_firstname').value = name;
         showProfileSetup();
       } catch (e) {
@@ -305,7 +309,9 @@
 
     function showProfileSetup() {
       document.getElementById('authPage').style.display = 'none';
-      document.getElementById('profileSetupPage').style.display = 'block';
+      var psp = document.getElementById('profileSetupPage');
+      psp.classList.remove('hidden');
+      psp.style.display = 'block';
     }
 
     function nextProfileStep(step) {
@@ -344,6 +350,10 @@
         });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur sauvegarde');
+        if (_tokens && _tokens.access_token) {
+          sessionStorage.setItem('_sb_at', _tokens.access_token);
+          sessionStorage.setItem('_sb_rt', _tokens.refresh_token);
+        }
         window.location.href = 'app.html';
       } catch (e) {
         showErr('profileError', 'Erreur : ' + e.message);
