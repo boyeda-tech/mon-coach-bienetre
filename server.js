@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -9,7 +10,24 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function injectConfig(html) {
+  const url = process.env.SUPABASE_URL || '';
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY || '';
+  const tag = `<script>window.__SB_URL__=${JSON.stringify(url)};window.__SB_KEY__=${JSON.stringify(key)};</script>`;
+  return html.replace('</head>', tag + '\n</head>');
+}
+
+const indexHtml = injectConfig(fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
+const appHtml   = injectConfig(fs.readFileSync(path.join(__dirname, 'public', 'app.html'), 'utf8'));
+
 app.use(express.json());
+
+// HTML routes before express.static so config injection takes precedence
+app.get('/',           (_req, res) => res.type('html').send(indexHtml));
+app.get('/index.html', (_req, res) => res.type('html').send(indexHtml));
+app.get('/app.html',   (_req, res) => res.type('html').send(appHtml));
+app.get('/app',        (_req, res) => res.type('html').send(appHtml));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 function buildSynthesisPrompt(profile, journals, weightHistory) {
@@ -103,15 +121,6 @@ QUESTION : ${question}
 Réponds de manière personnalisée, pratique et bienveillante en 3-5 paragraphes.`;
 }
 
-// Expose les credentials publics Supabase au frontend via les env vars du serveur
-app.get('/api/config', (_req, res) => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ error: 'Variables SUPABASE_URL et SUPABASE_PUBLISHABLE_KEY manquantes sur le serveur' });
-  }
-  res.json({ supabaseUrl, supabaseKey });
-});
 
 app.post('/api/ai', async (req, res) => {
   const { type, profile, journals, weightHistory, question } = req.body;
@@ -145,8 +154,6 @@ app.post('/api/ai', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'public', 'app.html')));
 
 app.listen(PORT, () => {
   console.log(`\n🌿 Mon Coach Bien-Être`);

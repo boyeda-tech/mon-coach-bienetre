@@ -2,7 +2,9 @@
    Mon Coach Bien-Être — app.js
    ============================================ */
 
-let supabase, currentUser, userProfile, weightHistory = [], weightChart;
+// Credentials injectés côté serveur — client créé synchronement, aucun fetch
+const supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
+let currentUser, userProfile, weightHistory = [], weightChart;
 
 const QUOTES = [
   { text: "Chaque pas en avant est un pas loin de là où vous étiez.", author: "— Unknown" },
@@ -28,29 +30,7 @@ const WORKOUT_PROGRAM = [
 
 async function init() {
   try {
-    // 1. Config depuis le serveur (env vars Render)
-    const res = await fetch('/api/config');
-    if (!res.ok) throw new Error('Config serveur inaccessible (' + res.status + ')');
-    const { supabaseUrl, supabaseKey } = await res.json();
-    if (!supabaseUrl || !supabaseKey) throw new Error('Variables Supabase manquantes');
-
-    // 2. Client Supabase via dynamic import
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    supabase = createClient(supabaseUrl, supabaseKey);
-
-    // 3. Session — lecture localStorage, avec fallback sessionStorage (tokens passés par index.html)
-    let { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      const at = sessionStorage.getItem('_sb_at');
-      const rt = sessionStorage.getItem('_sb_rt');
-      sessionStorage.removeItem('_sb_at');
-      sessionStorage.removeItem('_sb_rt');
-      if (at && rt) {
-        const { data } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
-        session = data.session;
-      }
-    }
+    const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
       window.location.href = 'index.html';
@@ -59,7 +39,6 @@ async function init() {
 
     currentUser = session.user;
 
-    // 4. Profil utilisateur
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
@@ -72,7 +51,7 @@ async function init() {
     }
     userProfile = profile;
 
-    // 5. Rendu initial
+    // Rendu initial
     const initials = (profile.first_name || 'U').charAt(0).toUpperCase();
     document.getElementById('userAvatar').textContent = initials;
 

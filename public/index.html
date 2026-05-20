@@ -11,6 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     /* Styles critiques inline — appliqués avant le CSS externe, compatibles Safari */
     .profile-wrap { max-width: 560px; margin: 0 auto; }
@@ -49,7 +50,7 @@
           <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" autocomplete="current-password">
         </div>
         <div id="loginError" class="error-msg hidden"></div>
-        <button class="btn btn-primary btn-full mt-16" onclick="handleLogin()" id="loginBtn" disabled>
+        <button class="btn btn-primary btn-full mt-16" onclick="handleLogin()" id="loginBtn">
           Se connecter
         </button>
       </div>
@@ -70,7 +71,7 @@
           <p class="form-hint">Minimum 6 caractères</p>
         </div>
         <div id="registerError" class="error-msg hidden"></div>
-        <button class="btn btn-primary btn-full mt-16" onclick="handleRegister()" id="registerBtn" disabled>
+        <button class="btn btn-primary btn-full mt-16" onclick="handleRegister()" id="registerBtn">
           Créer mon compte
         </button>
       </div>
@@ -225,37 +226,23 @@
   </div>
 
   <script>
-    let supabase;
+    // Credentials injectés côté serveur — synchrones, aucun fetch nécessaire
+    const supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
     let currentStep = 0;
 
-    async function initSession() {
+    async function init() {
       try {
-        // 1. Récupère les credentials depuis le serveur Express (env vars Render)
-        const res = await fetch('/api/config');
-        if (!res.ok) throw new Error('Impossible de charger la configuration serveur');
-        const { supabaseUrl, supabaseKey } = await res.json();
-        if (!supabaseUrl || !supabaseKey) throw new Error('Configuration Supabase manquante');
-
-        // 2. Import et initialisation du client Supabase
-        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-        supabase = createClient(supabaseUrl, supabaseKey);
-
-        // 3. Activation des boutons — supabase est maintenant garanti initialisé
-        document.getElementById('loginBtn').disabled = false;
-        document.getElementById('registerBtn').disabled = false;
-
-        // 4. Vérification session existante
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
           if (profile) {
-            await navigateToApp();
+            window.location.href = 'app.html';
           } else {
             showProfileSetup();
           }
         }
       } catch (e) {
-        document.getElementById('loginError').textContent = 'Erreur de connexion : ' + e.message;
+        document.getElementById('loginError').textContent = 'Erreur : ' + e.message;
         document.getElementById('loginError').classList.remove('hidden');
       }
     }
@@ -264,7 +251,6 @@
       document.querySelectorAll('.auth-tab').forEach(function(t, i) {
         t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
       });
-      // Utilise style.display directement pour fiabilité sur Safari iOS/macOS
       var loginForm = document.getElementById('loginForm');
       var registerForm = document.getElementById('registerForm');
       if (tab === 'login') {
@@ -285,12 +271,11 @@
       btn.disabled = true;
       btn.textContent = 'Connexion...';
       try {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        const { data: { session } } = await supabase.auth.getSession();
-        const { data: profile } = await supabase.from('profiles').select('id').eq('id', session.user.id).single();
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', data.user.id).single();
         if (profile) {
-          await navigateToApp();
+          window.location.href = 'app.html';
         } else {
           showProfileSetup();
         }
@@ -334,30 +319,17 @@
       }
     }
 
-    // Stocke les tokens Supabase dans sessionStorage avant de naviguer vers app.html.
-    // Évite le bug où un nouveau client Supabase ne retrouve pas la session cross-page.
-    async function navigateToApp() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          sessionStorage.setItem('_sb_at', session.access_token);
-          sessionStorage.setItem('_sb_rt', session.refresh_token);
-        }
-      } catch (_) {}
-      window.location.href = 'app.html';
-    }
-
     function showProfileSetup() {
       document.getElementById('authPage').style.display = 'none';
       document.getElementById('profileSetupPage').style.display = 'block';
     }
 
     function nextProfileStep(step) {
-      document.getElementById(`profileStep${currentStep}`).classList.remove('active');
-      document.getElementById(`dot${currentStep}`).classList.remove('active');
+      document.getElementById('profileStep' + currentStep).classList.remove('active');
+      document.getElementById('dot' + currentStep).classList.remove('active');
       currentStep = step;
-      document.getElementById(`profileStep${currentStep}`).classList.add('active');
-      document.getElementById(`dot${currentStep}`).classList.add('active');
+      document.getElementById('profileStep' + currentStep).classList.add('active');
+      document.getElementById('dot' + currentStep).classList.add('active');
       window.scrollTo(0, 0);
     }
 
@@ -368,7 +340,7 @@
       btn.disabled = true;
       btn.textContent = 'Enregistrement...';
 
-      const equipment = Array.from(document.querySelectorAll('#equipmentGroup input:checked')).map(c => c.value);
+      const equipment = Array.from(document.querySelectorAll('#equipmentGroup input:checked')).map(function(c) { return c.value; });
       const kneeVal = document.querySelector('input[name="knee"]:checked')?.value === 'true';
 
       const profileData = {
@@ -397,7 +369,7 @@
             weight: profileData.weight_start
           }, { onConflict: 'user_id,date' });
         }
-        await navigateToApp();
+        window.location.href = 'app.html';
       } catch (e) {
         err.textContent = 'Erreur: ' + e.message;
         err.classList.remove('hidden');
@@ -406,14 +378,14 @@
       }
     }
 
-    document.addEventListener('keydown', e => {
+    document.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
-        if (document.getElementById('loginForm').classList.contains('active')) handleLogin();
-        else handleRegister();
+        var registerShown = document.getElementById('registerForm').style.display === 'block';
+        if (registerShown) handleRegister(); else handleLogin();
       }
     });
 
-    initSession();
+    init();
   </script>
 </body>
 </html>
