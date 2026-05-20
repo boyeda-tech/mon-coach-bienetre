@@ -78,6 +78,9 @@
     </div>
   </div>
 
+  <!-- Badge build — version visible pour debug -->
+  <div id="buildBadge" style="position:fixed;bottom:8px;right:8px;font-size:10px;color:#aaa;font-family:monospace;z-index:999"></div>
+
   <!-- PROFILE SETUP PAGE -->
   <div id="profileSetupPage" class="profile-setup hidden">
     <div class="profile-wrap">
@@ -226,17 +229,27 @@
   </div>
 
   <script>
-    // Credentials injectés côté serveur — synchrones, aucun fetch nécessaire
+    var _b = document.getElementById('buildBadge');
+    if (_b && window.__BUILD__) _b.textContent = 'v' + window.__BUILD__.slice(0,16);
+
+    console.log('[MonCoach] index.html chargé — build:', window.__BUILD__);
+    console.log('[MonCoach] window.__SB_URL__ défini:', !!window.__SB_URL__);
+    console.log('[MonCoach] window.__SB_KEY__ défini:', !!window.__SB_KEY__);
+    console.log('[MonCoach] window.supabase disponible:', typeof window.supabase);
+
     let supabase;
     let currentStep = 0;
 
     try {
-      if (!window.supabase) throw new Error('Bibliothèque Supabase non chargée');
-      if (!window.__SB_URL__ || !window.__SB_KEY__) throw new Error('Configuration serveur manquante');
+      if (!window.supabase) throw new Error('Bibliothèque Supabase non chargée (window.supabase undefined)');
+      if (!window.__SB_URL__) throw new Error('SUPABASE_URL manquant — vérifiez les variables Render');
+      if (!window.__SB_KEY__) throw new Error('SUPABASE_PUBLISHABLE_KEY manquant — vérifiez les variables Render');
       supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
+      console.log('[MonCoach] Supabase initialisé avec succès');
     } catch (e) {
+      console.error('[MonCoach] Erreur init Supabase:', e.message);
       var _el = document.getElementById('loginError');
-      if (_el) { _el.textContent = 'Erreur : ' + e.message; _el.classList.remove('hidden'); }
+      if (_el) { _el.textContent = '⚠️ ' + e.message; _el.classList.remove('hidden'); }
     }
 
     async function init() {

@@ -10,23 +10,44 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+const BUILD_TIME = new Date().toISOString();
+
 function injectConfig(html) {
   const url = process.env.SUPABASE_URL || '';
   const key = process.env.SUPABASE_PUBLISHABLE_KEY || '';
-  const tag = `<script>window.__SB_URL__=${JSON.stringify(url)};window.__SB_KEY__=${JSON.stringify(key)};</script>`;
+  if (!url || !key) console.warn('[MonCoach] ATTENTION: SUPABASE_URL ou SUPABASE_PUBLISHABLE_KEY manquant!');
+  const tag = `<script>window.__SB_URL__=${JSON.stringify(url)};window.__SB_KEY__=${JSON.stringify(key)};window.__BUILD__=${JSON.stringify(BUILD_TIME)};</script>`;
   return html.replace('</head>', tag + '\n</head>');
 }
 
 const indexHtml = injectConfig(fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
 const appHtml   = injectConfig(fs.readFileSync(path.join(__dirname, 'public', 'app.html'), 'utf8'));
 
+console.log(`[MonCoach] Build: ${BUILD_TIME}`);
+console.log(`[MonCoach] SUPABASE_URL set: ${!!process.env.SUPABASE_URL}`);
+console.log(`[MonCoach] SUPABASE_PUBLISHABLE_KEY set: ${!!process.env.SUPABASE_PUBLISHABLE_KEY}`);
+
 app.use(express.json());
 
+function sendHtml(res, html) {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.type('html').send(html);
+}
+
 // HTML routes before express.static so config injection takes precedence
-app.get('/',           (_req, res) => res.type('html').send(indexHtml));
-app.get('/index.html', (_req, res) => res.type('html').send(indexHtml));
-app.get('/app.html',   (_req, res) => res.type('html').send(appHtml));
-app.get('/app',        (_req, res) => res.type('html').send(appHtml));
+app.get('/',           (_req, res) => sendHtml(res, indexHtml));
+app.get('/index.html', (_req, res) => sendHtml(res, indexHtml));
+app.get('/app.html',   (_req, res) => sendHtml(res, appHtml));
+app.get('/app',        (_req, res) => sendHtml(res, appHtml));
+
+// Endpoint de debug — vérifie que les variables Render sont bien lues
+app.get('/api/config', (_req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || null,
+    supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY || null,
+    build: BUILD_TIME,
+  });
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
