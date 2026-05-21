@@ -1,14 +1,24 @@
 /* ============================================
    Mon Coach Bien-Être — app.js
+   Pas de SDK Supabase — auth via token Bearer
    ============================================ */
 
-// Credentials injectés côté serveur — client créé synchronement, aucun fetch
-let supabase, currentUser, userProfile, weightHistory = [], weightChart;
-try {
-  if (!window.__SB_URL__ || !window.__SB_KEY__) throw new Error('Config manquante');
-  supabase = window.supabase.createClient(window.__SB_URL__, window.__SB_KEY__);
-} catch (e) {
-  console.error('[MonCoach] Supabase init failed:', e.message);
+let currentUser, userProfile, weightHistory = [], weightChart;
+let authToken = null;
+
+// Helper : appel API authentifié
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+  return data;
 }
 
 const QUOTES = [
@@ -34,61 +44,39 @@ const WORKOUT_PROGRAM = [
 // ---- INIT ----
 
 async function init() {
-  if (!supabase) {
-    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;font-family:-apple-system,system-ui,sans-serif"><div style="text-align:center"><p style="color:#6b7280;margin-bottom:20px">Service indisponible. Rechargez la page.</p><a href="index.html" style="background:#1D9E75;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px">Retour à la connexion</a></div></div>';
+  authToken = sessionStorage.getItem('_sb_at');
+  if (!authToken) {
+    window.location.href = 'index.html';
     return;
   }
+
   try {
-    let { data: { session } } = await supabase.auth.getSession();
+    const data = await api('/api/profile');
+    currentUser   = data.user;
+    userProfile   = data.profile;
+    weightHistory = data.weightHistory;
 
-    // Restaurer la session depuis sessionStorage si localStorage vide
-    if (!session) {
-      const at = sessionStorage.getItem('_sb_at');
-      const rt = sessionStorage.getItem('_sb_rt');
-      sessionStorage.removeItem('_sb_at');
-      sessionStorage.removeItem('_sb_rt');
-      if (at && rt) {
-        const { data } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
-        session = data.session;
-      }
-    }
-
-    if (!session) {
-      window.location.href = 'index.html';
-      return;
-    }
-
-    currentUser = session.user;
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', currentUser.id)
-      .single();
-
-    if (profileError || !profile) {
-      window.location.href = 'index.html';
-      return;
-    }
-    userProfile = profile;
-
-    // Rendu initial
-    const initials = (profile.first_name || 'U').charAt(0).toUpperCase();
+    const initials = (userProfile.first_name || 'U').charAt(0).toUpperCase();
     document.getElementById('userAvatar').textContent = initials;
 
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('newWeightDate').value = today;
     document.getElementById('journalDateLabel').textContent = formatDate(today);
 
-    await loadWeightHistory();
     renderHomePage();
     renderProgram();
     renderWeightPage();
     renderAiProfile();
 
   } catch (e) {
+    if (e.message === 'Non authentifié' || e.message === 'Token invalide' || e.message === 'Profil non trouvé') {
+      sessionStorage.removeItem('_sb_at');
+      sessionStorage.removeItem('_sb_rt');
+      window.location.href = 'index.html';
+      return;
+    }
     console.error('[MonCoach] init() error:', e);
-    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;font-family:-apple-system,system-ui,sans-serif"><div style="text-align:center"><p style="color:#6b7280;margin-bottom:20px">Impossible de charger l\'application.</p><a href="index.html" style="background:#1D9E75;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px">Retour à la connexion</a></div></div>';
+    document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;font-family:-apple-system,system-ui,sans-serif"><div style="text-align:center"><p style="color:#6b7280;margin-bottom:8px">Impossible de charger l'application.</p><p style="color:#9ca3af;font-size:13px;margin-bottom:20px">${e.message}</p><a href="index.html" style="background:#1D9E75;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px">Retour à la connexion</a></div></div>`;
   }
 }
 
@@ -163,14 +151,8 @@ async function renderTreatmentCard() {
     return;
   }
 
-  const { data: logs } = await supabase
-    .from('treatment_logs')
-    .select('date')
-    .eq('user_id', currentUser.id)
-    .order('date', { ascending: false })
-    .limit(1);
-
-  const lastDate = logs?.[0]?.date;
+  const logs = await api('/api/treatment-logs').catch(() => []);
+  const lastDate = logs[0]?.date;
   const nextDate = computeNextTreatment(lastDate, userProfile.treatment_frequency);
   const today = new Date().toISOString().split('T')[0];
   const isOverdue = nextDate && nextDate < today;
@@ -199,30 +181,27 @@ async function confirmTreatment() {
   const btn = document.getElementById('confirmTreatmentBtn');
   btn.disabled = true;
   const today = new Date().toISOString().split('T')[0];
-  const { error } = await supabase.from('treatment_logs').insert({
-    user_id: currentUser.id,
-    date: today,
-    treatment_name: userProfile.treatment,
-    done: true,
-  });
-  if (error) { showToast('Erreur: ' + error.message, 'error'); btn.disabled = false; return; }
-  showToast('Prise confirmée !', 'success');
-  renderTreatmentCard();
+  try {
+    await api('/api/treatment-logs', {
+      method: 'POST',
+      body: JSON.stringify({ date: today, treatment_name: userProfile.treatment }),
+    });
+    showToast('Prise confirmée !', 'success');
+    renderTreatmentCard();
+  } catch (e) {
+    showToast('Erreur: ' + e.message, 'error');
+    btn.disabled = false;
+  }
 }
 
 async function checkJournalStatus() {
   const today = new Date().toISOString().split('T')[0];
-  const { data } = await supabase
-    .from('journal_entries')
-    .select('id')
-    .eq('user_id', currentUser.id)
-    .eq('date', today)
-    .single();
+  const data = await api(`/api/journals?date=${today}`).catch(() => []);
 
   const icon = document.getElementById('journalStatusIcon');
   const text = document.getElementById('journalStatusText');
-  const sub = document.getElementById('journalStatusSub');
-  if (data) {
+  const sub  = document.getElementById('journalStatusSub');
+  if (data.length > 0) {
     icon.textContent = '✅';
     icon.className = 'status-icon done';
     text.textContent = 'Journal rempli aujourd\'hui';
@@ -287,7 +266,6 @@ async function saveJournal() {
   const didSport = document.querySelector('input[name="j_did_sport"]:checked')?.value === 'oui';
 
   const entry = {
-    user_id: currentUser.id,
     date: new Date().toISOString().split('T')[0],
     hygiene: {
       coucher: document.getElementById('j_coucher').value,
@@ -323,15 +301,13 @@ async function saveJournal() {
   };
 
   try {
-    const { error } = await supabase.from('journal_entries').upsert(entry, { onConflict: 'user_id,date' });
-    if (error) throw error;
+    await api('/api/journal', { method: 'POST', body: JSON.stringify(entry) });
 
     if (entry.sante.poids) {
-      await supabase.from('weight_logs').upsert({
-        user_id: currentUser.id,
-        date: entry.date,
-        weight: entry.sante.poids,
-      }, { onConflict: 'user_id,date' });
+      await api('/api/weight', {
+        method: 'POST',
+        body: JSON.stringify({ date: entry.date, weight: entry.sante.poids }),
+      });
       await loadWeightHistory();
       renderWeightPage();
     }
@@ -387,7 +363,6 @@ function renderProgram() {
 }
 
 function exportICS() {
-  const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const today = new Date();
   const mondayOffset = (today.getDay() + 6) % 7;
   const monday = new Date(today);
@@ -401,7 +376,6 @@ function exportICS() {
     date.setDate(monday.getDate() + i);
     const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
     const uid = `${dateStr}-${i}@moncoachbienetre`;
-
     ics += `BEGIN:VEVENT\nUID:${uid}\nDTSTART;VALUE=DATE:${dateStr}\nSUMMARY:🏋️ ${w.icon} ${w.label} — ${w.duration}\nDESCRIPTION:${w.detail}\nEND:VEVENT\n`;
   });
 
@@ -417,12 +391,7 @@ function exportICS() {
 // ---- WEIGHT ----
 
 async function loadWeightHistory() {
-  const { data } = await supabase
-    .from('weight_logs')
-    .select('date, weight')
-    .eq('user_id', currentUser.id)
-    .order('date', { ascending: true });
-  weightHistory = data || [];
+  weightHistory = await api('/api/weights').catch(() => []);
 }
 
 function renderWeightPage() {
@@ -473,16 +442,11 @@ function renderWeightChart() {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: { label: ctx => ` ${ctx.parsed.y} kg` },
-        },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} kg` } },
       },
       scales: {
         x: { grid: { display: false }, ticks: { maxTicksLimit: 7 } },
-        y: {
-          grid: { color: '#f0f0f0' },
-          ticks: { callback: v => `${v} kg` },
-        },
+        y: { grid: { color: '#f0f0f0' }, ticks: { callback: v => `${v} kg` } },
       },
     },
   });
@@ -514,16 +478,16 @@ async function addWeight() {
   const date = document.getElementById('newWeightDate').value;
   if (!val || !date) { showToast('Veuillez saisir un poids et une date', 'error'); return; }
 
-  const { error } = await supabase.from('weight_logs').upsert({
-    user_id: currentUser.id, date, weight: val,
-  }, { onConflict: 'user_id,date' });
-
-  if (error) { showToast('Erreur: ' + error.message, 'error'); return; }
-  document.getElementById('newWeight').value = '';
-  showToast('Poids enregistré !', 'success');
-  await loadWeightHistory();
-  renderWeightPage();
-  renderHomePage();
+  try {
+    await api('/api/weight', { method: 'POST', body: JSON.stringify({ date, weight: val }) });
+    document.getElementById('newWeight').value = '';
+    showToast('Poids enregistré !', 'success');
+    await loadWeightHistory();
+    renderWeightPage();
+    renderHomePage();
+  } catch (e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
 }
 
 // ---- COACH AI ----
@@ -559,13 +523,7 @@ async function generateSynthesis() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const since = sevenDaysAgo.toISOString().split('T')[0];
 
-  const { data: journals } = await supabase
-    .from('journal_entries')
-    .select('*')
-    .eq('user_id', currentUser.id)
-    .gte('date', since)
-    .order('date', { ascending: true });
-
+  const journals = await api(`/api/journals?since=${since}`).catch(() => []);
   const recentWeights = weightHistory.filter(w => w.date >= since);
 
   try {
@@ -575,7 +533,7 @@ async function generateSynthesis() {
       body: JSON.stringify({
         type: 'synthesis',
         profile: userProfile,
-        journals: journals || [],
+        journals,
         weightHistory: recentWeights,
       }),
     });
@@ -626,7 +584,12 @@ async function askQuestion() {
 // ---- LOGOUT ----
 
 async function handleLogout() {
-  await supabase.auth.signOut();
+  await fetch('/api/signout', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${authToken}` },
+  }).catch(() => {});
+  sessionStorage.removeItem('_sb_at');
+  sessionStorage.removeItem('_sb_rt');
   window.location.href = 'index.html';
 }
 

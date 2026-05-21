@@ -145,6 +145,132 @@ app.post('/api/profiles', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ---- DATA API — lecture/écriture via token utilisateur ----
+
+function getAuthToken(req) {
+  const auth = req.headers['authorization'];
+  return auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+}
+
+function getUserIdFromToken(token) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(Buffer.from(b64, 'base64').toString('utf8')).sub || null;
+  } catch { return null; }
+}
+
+app.get('/api/profile', async (req, res) => {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) return res.status(401).json({ error: 'Token invalide' });
+  try {
+    const [pR, wR] = await Promise.all([
+      fetch(sbUrl(`/rest/v1/profiles?id=eq.${userId}&select=*`), { headers: sbHeaders(token) }),
+      fetch(sbUrl(`/rest/v1/weight_logs?user_id=eq.${userId}&select=date,weight&order=date.asc`), { headers: sbHeaders(token) }),
+    ]);
+    const profiles = await pR.json();
+    const weights  = await wR.json();
+    if (!Array.isArray(profiles) || !profiles.length) return res.status(404).json({ error: 'Profil non trouvé' });
+    res.json({ user: { id: userId }, profile: profiles[0], weightHistory: Array.isArray(weights) ? weights : [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/weights', async (req, res) => {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) return res.status(401).json({ error: 'Token invalide' });
+  try {
+    const r = await fetch(sbUrl(`/rest/v1/weight_logs?user_id=eq.${userId}&select=date,weight&order=date.asc`), { headers: sbHeaders(token) });
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/weight', async (req, res) => {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) return res.status(401).json({ error: 'Token invalide' });
+  try {
+    const { date, weight } = req.body;
+    const r = await fetch(sbUrl('/rest/v1/weight_logs'), {
+      method: 'POST',
+      headers: { ...sbHeaders(token), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, date, weight }),
+    });
+    if (!r.ok) { const err = await r.json(); return res.status(400).json({ error: err.message || 'Erreur' }); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/journals', async (req, res) => {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) return res.status(401).json({ error: 'Token invalide' });
+  try {
+    let url = sbUrl(`/rest/v1/journal_entries?user_id=eq.${userId}&select=*&order=date.asc`);
+    if (req.query.since) url += `&date=gte.${encodeURIComponent(req.query.since)}`;
+    if (req.query.date)  url += `&date=eq.${encodeURIComponent(req.query.date)}`;
+    const r = await fetch(url, { headers: sbHeaders(token) });
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/journal', async (req, res) => {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) return res.status(401).json({ error: 'Token invalide' });
+  try {
+    const r = await fetch(sbUrl('/rest/v1/journal_entries'), {
+      method: 'POST',
+      headers: { ...sbHeaders(token), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ ...req.body, user_id: userId }),
+    });
+    if (!r.ok) { const err = await r.json(); return res.status(400).json({ error: err.message || 'Erreur' }); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/treatment-logs', async (req, res) => {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) return res.status(401).json({ error: 'Token invalide' });
+  try {
+    const r = await fetch(sbUrl(`/rest/v1/treatment_logs?user_id=eq.${userId}&select=date&order=date.desc&limit=1`), { headers: sbHeaders(token) });
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/treatment-logs', async (req, res) => {
+  const token = getAuthToken(req);
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) return res.status(401).json({ error: 'Token invalide' });
+  try {
+    const { date, treatment_name } = req.body;
+    const r = await fetch(sbUrl('/rest/v1/treatment_logs'), {
+      method: 'POST',
+      headers: { ...sbHeaders(token), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, date, treatment_name, done: true }),
+    });
+    if (!r.ok) { const err = await r.json(); return res.status(400).json({ error: err.message || 'Erreur' }); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/signout', async (req, res) => {
+  const token = getAuthToken(req);
+  if (token) await fetch(sbUrl('/auth/v1/logout'), { method: 'POST', headers: sbHeaders(token) }).catch(() => {});
+  res.json({ ok: true });
+});
+
 function buildSynthesisPrompt(profile, journals, weightHistory) {
   const age = profile.birth_date
     ? Math.floor((Date.now() - new Date(profile.birth_date)) / 31557600000)
